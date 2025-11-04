@@ -1,121 +1,137 @@
-import random
-import string
+import random   # Allows us to pick a random secret word
 
-# --- Word list (5-letter) — keep it small for speed; add more if you like ---
+# --- List of possible secret words ---
 WORDS = [
-    "apple","grape","pearl","plane","crane","stone","chili","spice","sugar","honey",
-    "bread","smile","track","focus","brain","river","ocean","earth","cloud","flame",
-    "cable","light","sound","dream","plain","chair","table","pride","glove","shark"
+    "apple", "grape", "plane", "stone", "spice", "sugar", "honey", "bread", "flame", "light",
+    "brick", "cloud", "dream", "field", "glove", "heart", "jelly", "knife", "lemon", "mango",
+    "night", "oasis", "pearl", "queen", "river", "stone", "table", "unity", "vivid", "whale", "xenon", "yacht",
+    "zebra", "bloom", "charm", "daisy", "ember", "frost", "glide", "harpy", "ivory", "jewel",
+    "karma", "lunar", "mirth", "novae", "optic", "plush", "quilt", "rover", "siren", "tiger", "ultra",
+    "vapor", "waltz", "xerox", "yodel", "zesty", "brave", "crisp", "dwell", "eager", "fable",
+    "gloom", "hover", "inbox", "jumpy", "knack", "latch", "motel", "noble", "orbit", "piano", "quark",
+    "rally", "shark", "tango", "unite", "vivid", "witty", "xylem", "yummy", "zonal", "adore",
+    "bliss", "crown", "drape", "elbow", "flick", "grind", "hatch", "index", "jolly", "kneel",
+    "smile", "track", "focus", "brain", "river", "ocean", "earth", "cloud"
 ]
 
-# ANSI colors for terminal
+# --- Text color codes for terminal output ---
+# These change how letters look on the screen (color + bold)
 RESET = "\033[0m"
-GREEN = "\033[92m"   # correct
-YELLOW = "\033[93m"  # present
-GRAY = "\033[90m"    # absent
+GREEN = "\033[92m"   # Correct letter, correct position
+YELLOW = "\033[93m"  # Correct letter, wrong position
+GRAY = "\033[90m"    # Letter not in word
 BOLD = "\033[1m"
 
-def pick_secret() -> str:
-    return random.choice(WORDS)
-
-def valid_guess(s: str) -> bool:
-    return len(s) == 5 and all(ch in string.ascii_letters for ch in s)
-
-def evaluate_guess(secret: str, guess: str):
-    """
-    Returns a list of statuses for each letter: 'correct', 'present', 'absent'.
-    Handles duplicate letters using a letter-count dictionary.
-    """
-    secret = secret.lower()
-    guess = guess.lower()
-
-    statuses = ["absent"] * 5
-    # Count letters in secret
-    counts = {}
-    for ch in secret:
-        counts[ch] = counts.get(ch, 0) + 1
-
-    # First pass: mark correct positions
-    for i, ch in enumerate(guess):
-        if ch == secret[i]:
-            statuses[i] = "correct"
-            counts[ch] -= 1
-
-    # Second pass: mark present (wrong position) if counts left
-    for i, ch in enumerate(guess):
-        if statuses[i] == "correct":
-            continue
-        if ch in counts and counts[ch] > 0:
-            statuses[i] = "present"
-            counts[ch] -= 1
-        else:
-            statuses[i] = "absent"
-
-    return statuses
-
-def colorize(letter: str, status: str) -> str:
+# -------------------------------------------------
+# Function: colorize(letter, status)
+# Purpose: return the letter with the correct color
+# -------------------------------------------------
+def colorize(letter, status):
     if status == "correct":
         return f"{GREEN}{BOLD}{letter.upper()}{RESET}"
     if status == "present":
         return f"{YELLOW}{BOLD}{letter.upper()}{RESET}"
     return f"{GRAY}{BOLD}{letter.upper()}{RESET}"
 
-def print_board(history):
-    """
-    history: list of tuples (guess, statuses_list)
-    Prints each row with colored letters.
-    """
-    for guess, statuses in history:
-        row = " ".join(colorize(ch, st) for ch, st in zip(guess, statuses))
-        print(row)
 
-def play_round():
-    secret = pick_secret()
-    attempts = 6
-    history = []
+# -------------------------------------------------
+# Function: evaluate(secret, guess)
+# Purpose: check each letter of the guess
+#          - correct spot -> green
+#          - wrong spot but in word -> yellow
+#          - not in word -> gray
+# Returns: list like ["correct", "present", "absent", ...]
+# -------------------------------------------------
+def evaluate(secret, guess):
+    result = ["absent"] * 5   # Start with all letters marked as "absent"
+    secret_counts = {}        # Dictionary to count letters in secret word
 
-    print(f"{BOLD}Wordle (Terminal) — guess the 5-letter word!{RESET}")
-    print("Green=correct • Yellow=present • Gray=not in word")
-    # Uncomment for debugging/teaching: print("DEBUG secret:", secret)
+    # Count each letter in secret word
+    for c in secret:  # Loop through each letter in the secret word
+        secret_counts[c] = secret_counts.get(c, 0) + 1
 
-    try:
-        for turn in range(1, attempts + 1):
-            guess = input(f"\nGuess {turn}/{attempts}: ").strip().lower()
+    # First pass: check correct letters in the correct position
+    for i in range(5):  # Loop through every letter position 0-4
+        if guess[i] == secret[i]:      # If the letter matches exactly
+            result[i] = "correct"
+            secret_counts[guess[i]] -= 1  # Reduce available count for that letter
 
-            if not valid_guess(guess):
-                print("❌ Please enter exactly 5 letters (A–Z).")
-                continue
+    # Second pass: check letters that exist in the word but in the wrong place
+    for i in range(5):
+        if result[i] == "correct":
+            continue  # Skip letters we already marked correct
+        if guess[i] in secret_counts and secret_counts[guess[i]] > 0:
+            result[i] = "present"     # Mark as yellow
+            secret_counts[guess[i]] -= 1
 
-            statuses = evaluate_guess(secret, guess)
-            history.append((guess, statuses))
-            print_board(history)
+    return result
 
-            if guess == secret:
-                print(f"\n🎉 Nice! You got it in {turn} {'try' if turn==1 else 'tries'}.")
-                return True
 
-        print(f"\n💥 Out of tries. The word was: {BOLD}{secret.upper()}{RESET}")
-        return False
+# -------------------------------------------------
+# Function: play()
+# Purpose: run one full round of Wordle (6 guesses)
+# Returns: True if player wins, False if loses
+# -------------------------------------------------
+def play():
+    secret = random.choice(WORDS)   # Choose random secret word
+    history = []  # Stores past guesses and results
 
-    except KeyboardInterrupt:
-        print("\n\n(Interrupted)")
-        return False
+    print(f"{BOLD}WORDLE — Guess the 5-letter word!{RESET}")
+    print("(Green = correct, Yellow = wrong place, Gray = not in word)")
 
+    # Loop for 6 guesses
+    for turn in range(1, 7):
+        guess = input(f"\nGuess {turn}/6: ").lower()
+
+        # Check input validity
+        if len(guess) != 5 or not guess.isalpha():
+            print("❌ Enter exactly 5 letters.")
+            continue  # Ask again without losing a turn
+
+        # Check guess vs secret
+        result = evaluate(secret, guess)
+        history.append((guess, result))
+
+        # Print all previous guesses with colors
+        for g, r in history:  # Loop through all saved guesses
+            print(" ".join(colorize(c, s) for c, s in zip(g, r)))
+
+        # If guess is correct → win
+        if guess == secret:
+            print(f"\n🎉 You got it in {turn} tries!")
+            return True
+
+    # If all 6 guesses used → loss
+    print(f"\n💥 Out of tries! The word was {BOLD}{secret.upper()}{RESET}")
+    return False
+
+
+# -------------------------------------------------
+# Function: main()
+# Purpose: run the game repeatedly until player stops
+# Tracks games played and win rate
+# -------------------------------------------------
 def main():
-    print("Press Ctrl+C to exit at any time.")
-    wins = 0
-    games = 0
+    games, wins = 0, 0
+    print("Press Ctrl+C to quit.")
+
+    # Infinite loop until player chooses to stop
     while True:
-        result = play_round()
+        if play():  # If player won
+            wins += 1
         games += 1
-        wins += int(result)
-        # Simple stats dictionary
-        stats = {"games": games, "wins": wins, "win_rate": f"{(wins/games*100):.0f}%"}
-        print(f"\nStats: {stats}")
-        again = input("\nPlay again? (y/n): ").strip().lower()
-        if again != "y":
+
+        # Show stats
+        print(f"\nGames: {games}, Wins: {wins}, Win Rate: {wins/games*100:.0f}%")
+
+        # Ask if player wants to continue
+        if input("\nPlay again? (y/n): ").lower() != "y":
             print("Thanks for playing!")
             break
 
+
+# -------------------------------------------------
+# Start the game if this file is run directly
+# -------------------------------------------------
 if __name__ == "__main__":
     main()
